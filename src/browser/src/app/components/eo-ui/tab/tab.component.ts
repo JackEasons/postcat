@@ -1,13 +1,13 @@
 import { KeyValue } from '@angular/common';
 import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, TemplateRef } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
-import { NzDropdownMenuComponent } from 'ng-zorro-antd/dropdown';
+import { NzContextMenuService, NzDropdownMenuComponent } from 'ng-zorro-antd/dropdown';
 import { NzTabsCanDeactivateFn } from 'ng-zorro-antd/tabs';
 import { TabOperateService } from 'pc/browser/src/app/components/eo-ui/tab/tab-operate.service';
 import { TabStorageService } from 'pc/browser/src/app/components/eo-ui/tab/tab-storage.service';
 import { TabItem, TabOperate } from 'pc/browser/src/app/components/eo-ui/tab/tab.model';
 import { TraceService } from 'pc/browser/src/app/services/trace.service';
-import { StoreService } from 'pc/browser/src/app/store/state.service';
+import { StoreService } from 'pc/browser/src/app/shared/store/state.service';
 import { filter, Subscription } from 'rxjs';
 
 import { ModalService } from '../../../services/modal.service';
@@ -35,8 +35,12 @@ export class EoTabComponent implements OnInit, OnDestroy {
     private modal: ModalService,
     private router: Router,
     public store: StoreService,
-    private trace: TraceService
+    private trace: TraceService,
+    private nzContextMenuService: NzContextMenuService
   ) {}
+  contextMenu($event: MouseEvent, menu: NzDropdownMenuComponent, tabID): void {
+    this.nzContextMenuService.create($event, menu);
+  }
   ngOnInit(): void {
     this.watchRouterChange();
     this.watchPageLeave();
@@ -49,6 +53,7 @@ export class EoTabComponent implements OnInit, OnDestroy {
       handleDataBeforeGetCache: this.handleDataBeforeGetCache
     });
   }
+
   async newTab(key = undefined) {
     if (this.checkTabCanLeave && !(await this.checkTabCanLeave())) {
       return false;
@@ -85,7 +90,7 @@ export class EoTabComponent implements OnInit, OnDestroy {
       return;
     }
     $event.stopPropagation();
-    if (!tab.hasChanged) {
+    if (!tab?.hasChanged) {
       this.tabOperate.closeTab(index);
       return;
     }
@@ -122,7 +127,7 @@ export class EoTabComponent implements OnInit, OnDestroy {
       ]
     });
   }
-  //Quick see tabs change in templete,for debug,can be deleted
+  //Quick see tabs change in template,for debug,can be deleted
   // ! just for debug
   getConsoleTabs() {
     const tabs = [];
@@ -132,6 +137,7 @@ export class EoTabComponent implements OnInit, OnDestroy {
         return;
       }
       tabs.push({
+        baseContent: tab.baseContent,
         uuid: tab.uuid,
         type: tab.type,
         title: tab.title,
@@ -139,7 +145,6 @@ export class EoTabComponent implements OnInit, OnDestroy {
         params: tab.params
       });
     });
-    console.log(tabs);
     return tabs;
   }
   getTabs() {
@@ -148,17 +153,22 @@ export class EoTabComponent implements OnInit, OnDestroy {
     return tabs;
   }
   /**
-   * Get tab by url with same content
+   * Get tab by tab id
    *
-   * @param url
+   * @param uuid
+   */
+  getTabByID(uuid: TabItem['uuid']) {
+    return this.tabStorage.tabsByID.get(uuid);
+  }
+  /**
+   * Get Tab id by child component resource id
+   *
+   * @param uuid queryParams uuid
    * @returns
    */
-  getExistTabByUrl(url: string): TabItem | null {
-    const existTab = this.tabOperate.getSameTab(this.tabOperate.getBasicInfoFromUrl(url));
-    if (!existTab) {
-      return null;
-    }
-    return existTab;
+  getTabByParamsID(uuid: TabItem['params']['uuid']) {
+    const tabID = this.tabStorage.tabOrder.find(tabID => this.tabStorage.tabsByID.get(tabID)?.params?.uuid === uuid);
+    return this.tabStorage.tabsByID.get(tabID);
   }
   getCurrentTab() {
     return this.tabOperate.getCurrentTab();
@@ -169,14 +179,14 @@ export class EoTabComponent implements OnInit, OnDestroy {
   /**
    * update tab
    *
-   * @param url when url exist in tabs,replace
+   * @param uuid tab uuid
    * @param tabItem
    * @returns
    */
-  updatePartialTab(url: string, tabItem: Partial<TabItem>) {
-    const existTab = this.getExistTabByUrl(url);
+  updatePartialTab(uuid: string | number, tabItem: Partial<TabItem>) {
+    const existTab = this.getTabByID(uuid);
     if (!existTab) {
-      pcConsole.error(`:updatePartialTab fail,can't find exist tab to fixed url:${url}`);
+      pcConsole.error(`:updatePartialTab fail,can't find exist tab to fixed uuid:${uuid}`);
       return;
     }
     const index = this.tabStorage.tabOrder.findIndex(uuid => uuid === existTab.uuid);
@@ -185,6 +195,7 @@ export class EoTabComponent implements OnInit, OnDestroy {
       ...tabItem,
       extends: { ...existTab.extends, ...tabItem.extends }
     });
+    // console.log('updatePartialTabSuccess', this.tabStorage.tabsByID.get(uuid));
   }
   /**
    * Cache tab header/tabs content for restore when page close or component destroy
@@ -194,13 +205,19 @@ export class EoTabComponent implements OnInit, OnDestroy {
       handleDataBeforeCache: this.handleDataBeforeCache
     });
   }
+  checkIsFirstTab(uuid) {
+    return this.tabStorage.tabOrder.findIndex(val => val === uuid) === 0;
+  }
+  checkIsLastTab(uuid) {
+    return this.tabStorage.tabOrder.length - 1 === this.tabStorage.tabOrder.findIndex(val => val === uuid);
+  }
   /**
    * Tab  Close Operate
    *
    * @param action
    */
-  closeTabByOperate(action: TabOperate | string) {
-    this.tabOperate.closeTabByOperate(action);
+  closeTabByOperate(action: TabOperate | string, uuid?) {
+    this.tabOperate.closeTabByOperate(action, uuid);
   }
   private watchRouterChange() {
     this.routerSubscribe = this.router.events.pipe(filter(event => event instanceof NavigationEnd)).subscribe((res: NavigationEnd) => {
@@ -212,6 +229,7 @@ export class EoTabComponent implements OnInit, OnDestroy {
     this.cacheData();
   }
   private watchPageLeave = () => {
+    //TODO Only add beforeunload listeners conditionally: https://web.dev/bfcache/?utm_source=devtools#never-use-the-unload-event
     window.addEventListener('beforeunload', e => {
       this.cacheData();
     });

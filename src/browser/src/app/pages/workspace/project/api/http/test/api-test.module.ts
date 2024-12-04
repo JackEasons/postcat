@@ -12,8 +12,11 @@ import { NzTypographyModule } from 'ng-zorro-antd/typography';
 import { NzUploadModule } from 'ng-zorro-antd/upload';
 import { EoMonacoEditorModule } from 'pc/browser/src/app/components/eo-ui/monaco-editor/monaco.module';
 import { ElectronService, WebService } from 'pc/browser/src/app/core/services';
+import { AiInputGroupComponent } from 'pc/browser/src/app/pages/components/ai-input-group/ai-input-group.component';
 import { ApiSharedModule } from 'pc/browser/src/app/pages/workspace/project/api/api-shared.module';
-import { ApiScriptComponent } from 'pc/browser/src/app/pages/workspace/project/api/http/test/api-script/api-script.component';
+import { ResponseStepsComponent } from 'pc/browser/src/app/pages/workspace/project/api/components/response-steps/response-steps.component';
+import { ApiCaseService } from 'pc/browser/src/app/pages/workspace/project/api/http/test/api-case.service';
+import { ApiTestUiComponent } from 'pc/browser/src/app/pages/workspace/project/api/http/test/api-test-ui.component';
 import { TestServerLocalNodeService } from 'pc/browser/src/app/pages/workspace/project/api/service/test-server/local-node/test-connect.service';
 import { TestServerRemoteService } from 'pc/browser/src/app/pages/workspace/project/api/service/test-server/remote-node/test-connect.service';
 import { TestServerServerlessService } from 'pc/browser/src/app/pages/workspace/project/api/service/test-server/serverless-node/test-connect.service';
@@ -22,7 +25,6 @@ import { SharedModule } from '../../../../../../shared/shared.module';
 import { ApiTestUtilService } from '../../service/api-test-util.service';
 import { TestServerService } from '../../service/test-server/test-server.service';
 import { ApiTestComponent } from './api-test.component';
-import { ApiTestService } from './api-test.service';
 import { ApiTestBodyComponent } from './body/api-test-body.component';
 import { ApiTestResultRequestBodyComponent } from './result-request-body/api-test-result-request-body.component';
 import { ApiTestResultResponseComponent } from './result-response/api-test-result-response.component';
@@ -40,11 +42,11 @@ const UI_COMPONETS = [
   EoMonacoEditorModule
 ];
 const COMPONENTS = [
+  ApiTestUiComponent,
   ApiTestComponent,
   ApiTestBodyComponent,
   ApiTestResultResponseComponent,
-  ApiTestResultRequestBodyComponent,
-  ApiScriptComponent
+  ApiTestResultRequestBodyComponent
 ];
 @NgModule({
   declarations: [...COMPONENTS, ByteToStringPipe, TestStatusBarComponent],
@@ -62,20 +64,22 @@ const COMPONENTS = [
     ...UI_COMPONETS,
     SharedModule,
     ApiSharedModule,
-    NzResizableModule
+    NzResizableModule,
+    ResponseStepsComponent,
+    AiInputGroupComponent
   ],
   providers: [
-    ApiTestService,
     NzResizableService,
+    ApiCaseService,
     {
       provide: TestServerService,
       useFactory: (electron: ElectronService, web: WebService, locale, test: ApiTestUtilService) => {
         if (electron.isElectron) {
           return new TestServerLocalNodeService(electron, locale, test);
         } else if (!web.isVercel) {
-          return new TestServerRemoteService(locale, test);
+          return new TestServerRemoteService(electron, locale, test);
         } else {
-          return new TestServerServerlessService(locale, test);
+          return new TestServerServerlessService(electron, locale, test);
         }
       },
       deps: [ElectronService, WebService, LOCALE_ID, ApiTestUtilService]

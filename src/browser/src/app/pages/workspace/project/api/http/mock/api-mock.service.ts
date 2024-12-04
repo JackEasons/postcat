@@ -1,20 +1,44 @@
-import { Injectable } from '@angular/core';
-import { ApiBodyType } from 'pc/browser/src/app/pages/workspace/project/api/api.model';
+import { Inject, Injectable } from '@angular/core';
+import { Router } from '@angular/router';
+import { EoNgFeedbackMessageService } from 'eo-ng-feedback';
+import { PageUniqueName } from 'pc/browser/src/app/pages/workspace/project/api/api-tab.service';
+import { ApiBodyType, BASIC_TABS_INFO, TabsConfig } from 'pc/browser/src/app/pages/workspace/project/api/constants/api.model';
 import { ApiTestUtilService } from 'pc/browser/src/app/pages/workspace/project/api/service/api-test-util.service';
+import { ProjectApiService } from 'pc/browser/src/app/pages/workspace/project/api/service/project-api.service';
+import { ApiEffectService } from 'pc/browser/src/app/pages/workspace/project/api/store/api-effect.service';
 import { syncUrlAndQuery } from 'pc/browser/src/app/pages/workspace/project/api/utils/api.utils';
+import { ModalService } from 'pc/browser/src/app/services/modal.service';
 import { ApiService } from 'pc/browser/src/app/services/storage/api.service';
-import { ApiData } from 'pc/browser/src/app/services/storage/db/models';
+import { MockCreateWay } from 'pc/browser/src/app/services/storage/db/models';
+import { ApiData } from 'pc/browser/src/app/services/storage/db/models/apiData';
+import { TraceService } from 'pc/browser/src/app/services/trace.service';
+import { StoreService } from 'pc/browser/src/app/shared/store/state.service';
 import { json2xml, table2json } from 'pc/browser/src/app/shared/utils/data-transfer/data-transfer.utils';
-import { StoreService } from 'pc/browser/src/app/store/state.service';
+import storageUtils from 'pc/browser/src/app/shared/utils/storage/storage.utils';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class ApiMockService {
-  constructor(private api: ApiService, private store: StoreService, private testUtils: ApiTestUtilService) {
+  mockOperateUrl;
+  constructor(
+    private api: ApiService,
+    private globalStore: StoreService,
+    private testUtils: ApiTestUtilService,
+    private router: Router,
+    private message: EoNgFeedbackMessageService,
+    private trace: TraceService,
+    private apiEffect: ApiEffectService,
+    private projectApi: ProjectApiService,
+    private modalService: ModalService,
+    @Inject(BASIC_TABS_INFO) public tabsConfig: TabsConfig
+  ) {
+    this.mockOperateUrl = this.tabsConfig.pathByName[PageUniqueName.HttpMock];
     console.log('init api mock service');
   }
   getMockPrefix(apiData) {
     const uri = syncUrlAndQuery(this.testUtils.formatUri(apiData.uri, apiData.restParams), apiData.queryParams).url;
-    return `${this.store.mockUrl}/${uri}`;
+    return `${this.globalStore.mockUrl}/${uri}`;
   }
 
   /**
@@ -51,7 +75,6 @@ export class ApiMockService {
     return data;
   }
   async deleteMock(id: number) {
-    console.log(id);
     const [data, err] = await this.api.api_mockDelete({ id });
     return data;
   }
@@ -71,5 +94,70 @@ export class ApiMockService {
         return json2xml(table2json(body));
       }
     }
+  }
+  toDetail(model) {
+    this.router.navigate([this.mockOperateUrl], {
+      queryParams: { uuid: model.id, apiUuid: model.apiUuid, pageID: Date.now() }
+    });
+  }
+  toEdit(mockID) {
+    storageUtils.set('mock-edit', true);
+    this.router.navigate([this.mockOperateUrl], {
+      queryParams: { uuid: mockID }
+    });
+  }
+  async toAdd(apiUuid?) {
+    // this.router.navigate([this.mockOperateUrl], {
+    //   queryParams: { apiUuid: apiID, pageID: Date.now() }
+    // });
+    const apiData = await this.projectApi.get(apiUuid);
+    const data = {
+      name: $localize`:@@NewMockTitle:New Mock`,
+      response: this.getMockResponseByAPI(apiData),
+      apiUuid: apiUuid
+    };
+    this.trace.report('add_mock_success');
+    this.addNewMock(data);
+  }
+
+  async addNewMock(mockItem) {
+    mockItem.createWay = MockCreateWay.Custom;
+    const [data, err] = await this.createMock(mockItem);
+    if (err) {
+      this.message.error($localize`Failed to add`);
+      return;
+    }
+    this.message.success($localize`Added successfully`);
+    storageUtils.set('mock-edit', true);
+    this.apiEffect.createMock();
+    this.router.navigate([this.mockOperateUrl], {
+      queryParams: { uuid: data.id, pageID: Date.now().toString() }
+    });
+  }
+  async toDelete(id: number, mock_name: string) {
+    const modelRef = this.modalService.confirm({
+      nzTitle: $localize`Deletion Confirmation?`,
+      nzContent: $localize`Are you sure you want to delete the data <strong title="${mock_name}">${
+        mock_name.length > 50 ? `${mock_name.slice(0, 50)}...` : mock_name
+      }</strong> ? You cannot restore it once deleted!`,
+      nzOnOk: async () => {
+        const data = await this.deleteMock(id);
+        if (!data) {
+          this.message.error($localize`Failed to delete`);
+          return;
+        }
+        this.message.success($localize`Successfully deleted`);
+        this.apiEffect.deleteMockDetail();
+      }
+    });
+  }
+  async copy(mock_id: string) {
+    const [res] = await this.api.api_mockDetail({ id: mock_id });
+    const data = {
+      name: `${res.name} Copy`,
+      response: res.response,
+      apiUuid: res.apiUuid
+    };
+    this.addNewMock(data);
   }
 }

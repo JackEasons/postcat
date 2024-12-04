@@ -1,9 +1,7 @@
 import { Component } from '@angular/core';
 import { EoNgFeedbackMessageService } from 'eo-ng-feedback';
-import { copy } from 'pc/browser/src/app/shared/utils/index.utils';
-import { EffectService } from 'pc/browser/src/app/store/effect.service';
-import { StoreService } from 'pc/browser/src/app/store/state.service';
-import { interval } from 'rxjs';
+import { EffectService } from 'pc/browser/src/app/shared/store/effect.service';
+import { StoreService } from 'pc/browser/src/app/shared/store/state.service';
 
 import { DataSourceService } from '../../services/data-source/data-source.service';
 @Component({
@@ -38,7 +36,7 @@ import { DataSourceService } from '../../services/data-source/data-source.servic
         <ng-container *ngIf="link">
           <p nz-typography [nzContent]="link" nzCopyable nzEllipsis [nzCopyText]="link" [nzCopyIcons]="[copedIcon, copedIcon]"> </p>
           <ng-template #copedIcon>
-            <button eo-ng-button nzType="text"><eo-iconpark-icon name="copy"></eo-iconpark-icon></button>
+            <button trace traceID="copy_share_link" eo-ng-button nzType="text"><eo-iconpark-icon name="copy"></eo-iconpark-icon></button>
           </ng-template>
         </ng-container>
       </div>
@@ -52,12 +50,12 @@ export class GetShareLinkComponent {
     private effect: EffectService,
     public store: StoreService,
     public dataSourceService: DataSourceService,
-    private message: EoNgFeedbackMessageService
+    private feedback: EoNgFeedbackMessageService
   ) {}
   handleGetShareLink() {
     this.dataSourceService.checkRemoteCanOperate(async () => {
       if (this.store.isLocal) {
-        this.message.info($localize`If you want to share API,Please switch to cloud workspace`);
+        this.feedback.info($localize`If you want to share API,Please switch to cloud workspace`);
       }
       this.link = await this.effect.updateShareLink();
     });

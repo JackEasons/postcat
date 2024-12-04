@@ -4,7 +4,6 @@ import Store from 'electron-store';
 import { LanguageService } from 'pc/app/electron-main/language.service';
 import { MockServer } from 'pc/platform/node/mock-server';
 import {
-  GET_EXT_TABS,
   GET_FEATURE,
   GET_MOCK_URL,
   GET_MODULE,
@@ -123,7 +122,7 @@ class EoBrowserWindow {
   public create(): BrowserWindow {
     // Create the browser window.
     const opts = {
-      useContentSize: true, // 这个要设置，不然计算显示区域尺寸不准
+      useContentSize: true,
       frame: os.type() === 'Darwin' ? true : false, //mac use default frame
       minWidth: 400,
       minHeight: 300,
@@ -131,6 +130,7 @@ class EoBrowserWindow {
         webSecurity: false,
         preload: path.join(__dirname, '../../', 'platform', 'electron-browser', 'preload.js'),
         nodeIntegration: true,
+        //! it must be false because we need run extension in sandbox
         contextIsolation: false,
         allowRunningInsecureContent: processEnv === 'development' ? true : false
       }
@@ -229,8 +229,6 @@ try {
 
   const getWebsocketPort = () => Promise.resolve(websocketPort);
 
-  const getExtTabs = arg => Promise.resolve(moduleManager.getExtTabs(arg.data.extName));
-
   const loginWith = arg => {
     if (loginWindow) {
       loginWindow.destroy();
@@ -278,7 +276,6 @@ try {
     [GET_FEATURE]: getFeature,
     [GET_MOCK_URL]: getMockUrl,
     [GET_WEBSOCKET_PORT]: getWebsocketPort,
-    [GET_EXT_TABS]: getExtTabs,
     // * It is eletron, open a new window for login
     [LOGIN_WITH]: loginWith,
     [GET_SIDEBAR_VIEW]: getSidebarView,

@@ -1,17 +1,17 @@
-import { Component, OnInit } from '@angular/core';
-import { EffectService } from 'pc/browser/src/app/store/effect.service';
-import { StoreService } from 'pc/browser/src/app/store/state.service';
+import { Component } from '@angular/core';
+import { EffectService } from 'pc/browser/src/app/shared/store/effect.service';
+import { StoreService } from 'pc/browser/src/app/shared/store/state.service';
 
 import { FeatureControlService } from '../../../../core/services/feature-control/feature-control.service';
 import { DataSourceService } from '../../../../services/data-source/data-source.service';
 import { MessageService } from '../../../../services/message';
-import { ModalService } from '../../../../services/modal.service';
 
 @Component({
   selector: 'eo-select-workspace',
   template: ` <button
       nzTrigger="click"
       eo-ng-button
+      (nzVisibleChange)="dropdownVisibleChange($event)"
       nzType="text"
       nzOverlayClassName="select-workspace-class"
       eo-ng-dropdown
@@ -89,7 +89,10 @@ export class SelectWorkspaceComponent {
       this.store.getWorkspaceList.filter(val => !val?.isLocal)
     );
   }
-
+  dropdownVisibleChange(isVisible) {
+    if (!isVisible) return;
+    this.effect.updateWorkspaceList();
+  }
   changeWorkspace(workspaceID) {
     this.effect.switchWorkspace(workspaceID);
   }
